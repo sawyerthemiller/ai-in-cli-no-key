@@ -11,7 +11,6 @@ def clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 def run_server():
-    # only one print at startup
     clear_screen()
     print()
     print()
@@ -63,24 +62,38 @@ def run_server():
                 page.fill(input_selector, prompt_text)
                 page.keyboard.press("Enter")
 
-                # wait for the "stop generating" button to show
-                # this ensures we don't scrape before it even starts
+                # wait for 'stop generating' to show
                 try:
-                    page.wait_for_selector('button[aria-label="Stop generating"]', state='visible', timeout=5000)
+                    page.wait_for_selector('button[aria-label="Stop generating"]', state='visible', timeout=30000)
                 except:
-                    pass # proceed if it failed (maybe response was instant)
+                    pass 
 
-                # wait for the "stop generating" button to gone
-                # This ensures we wait until it is fully done.
+                # wait for 'stop generating' to go away
                 try:
-                    page.wait_for_selector('button[aria-label="Stop generating"]', state='hidden', timeout=60000)
+                    page.wait_for_selector('button[aria-label="Stop generating"]', state='hidden', timeout=120000)
                 except:
                     pass
                 
-                # small safety buffer to let the DOM settle
-                time.sleep(0.5)
+                # the fallback text stability check
+                # require text to be stable for one second before sending
+                last_content = ""
+                stability_counter = 0
+                
+                while stability_counter < 2:
+                    responses = page.query_selector_all('.markdown')
+                    current_content = responses[-1].inner_text() if responses else ""
+                    
+                    if current_content != last_content and len(current_content) > 0:
+                        # Text changed, reset counter
+                        stability_counter = 0
+                        last_content = current_content
+                    else:
+                        # Text did not change
+                        stability_counter += 1
+                    
+                    time.sleep(0.5)
 
-                # scrape
+                # scrape final
                 responses = page.query_selector_all('.markdown')
                 reply = responses[-1].inner_text() if responses else ""
 
@@ -90,7 +103,7 @@ def run_server():
                 print("sent data to client")
             
             except Exception:
-                pass # silent error handling
+                pass 
             
             finally:
                 conn.close()
